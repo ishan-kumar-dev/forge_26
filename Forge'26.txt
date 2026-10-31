@@ -1,0 +1,88 @@
+PROBLEM STATEMENT->
+
+Municipal authorities routinely receive reports of potholes, water leakage, sewage overflow, broken streetlights, damaged sidewalks, waste accumulation, fallen trees, and other public-infrastructure issues. However, these complaints are often submitted through disconnected channels such as helplines, emails, paper forms, social media, or informal messaging groups. The reports may be vague, duplicated, missing location details, or sent to the wrong department.
+
+Because of this, municipal staff must manually read, verify, classify, prioritize, and forward every complaint. This creates administrative backlogs, slows down emergency responses, makes accountability unclear, and gives citizens little information about whether their grievance has been acknowledged or resolved. Critical problems that affect public safety, health, traffic flow, or essential services may remain unattended for long periods.
+
+The proposed system is an open, transparent digital platform that enables citizens to report infrastructure defects and allows municipalities to intelligently triage, assign, track, and resolve them.
+
+
+OBJECTIVES->
+
+The system should:
+- Provide one accessible channel for citizens to report civic and infrastructure problems.
+- Automatically identify the issue category, location, urgency, and responsible department.
+- Prioritize high-severity and safety-critical reports.
+- Reduce duplicate complaints and manual administrative work.
+- Route complaints directly to the correct municipal department or field team.
+- Allow citizens and administrators to track progress transparently.
+- Publish aggregate public dashboards showing complaint volumes, response performance, and resolution status.
+
+
+REQUIRED CITIZEN INPUT->
+
+When filing a report, a citizen should be able to provide:
+- A photo or short video of the issue.
+- An optional audio recording or written description.
+- Location information through GPS, map pin, ward selection, or manually entered address.
+- Issue category, if known, such as road damage, water supply, drainage, sanitation, streetlight, or public safety.
+- The date and time of observation.
+- Optional contact details for updates or clarification.
+- An option to report anonymously, while retaining sufficient data for verification.
+The interface should be mobile-friendly, multilingual, accessible to people with disabilities, and usable in low-bandwidth environments.
+
+
+
+CORE FEATURES TO IMPLEMENT->
+
+- Citizen reporting portal
+A web or mobile interface for submitting and viewing complaints, uploading media, selecting locations, and tracking report status.
+
+- AI-based issue analysis
+Computer vision should analyze uploaded images to detect likely infrastructure defects—for example potholes, garbage piles, waterlogging, broken streetlights, or damaged roads. Natural-language and speech-processing components should extract issue details from written and audio descriptions.
+
+- Severity and priority assessment
+The system should assign a severity score based on factors such as the type of issue, estimated size, risk to public safety, proximity to schools or hospitals, traffic impact, recurrence, and number of duplicate reports.
+
+- Geospatial mapping
+Every grievance should be represented on a map using GPS coordinates or a mapped address. Clustering should identify repeated reports from the same area and highlight civic hotspots.
+
+- Departmental routing and work-order generation
+Based on classification and location, the platform should route a verified grievance to the appropriate department, such as roads and public works, water supply, drainage, sanitation, electrical maintenance, or parks. The assigned department should receive a structured task or work order.
+
+- Status tracking and notifications
+Each complaint should move through clear stages, such as:
+Submitted → Under Review → Verified → Assigned → In Progress → Resolved → Closed
+Citizens should receive notifications when the status changes, when clarification is needed, or when resolution evidence is uploaded.
+
+- Public transparency dashboard
+A public dashboard should display anonymized reports, issue categories, affected locations, average response times, pending cases, resolved cases, departmental performance, and recurring problem areas. Sensitive personal information must never be displayed publicly.
+
+- Administrative dashboard
+Municipal staff should be able to review reports, correct AI classifications, merge duplicates, reassign tasks, set service-level deadlines, upload before-and-after evidence, and generate performance reports.
+
+
+KEY USERS->
+
+- Citizens reporting local civic problems.
+- Municipal administrators monitoring the grievance process.
+- Department supervisors assigning work.
+- Field workers updating progress and uploading resolution evidence.
+- Public oversight groups, researchers, and journalists using anonymized dashboard data.
+- Elected representatives monitoring ward-level infrastructure needs.
+
+
+IMPORTANT NON-FUNCTIONAL REQ->
+
+- Protect citizen privacy and secure uploaded media, contact details, and location data.
+- Clearly label AI recommendations as assistive; municipal staff should retain authority to review and override decisions.
+- Prevent misuse through spam detection, duplicate detection, moderation, and report verification.
+- Maintain an audit trail of status changes, assignments, and departmental actions.
+- Support multilingual reporting and accessible design.
+- Provide APIs or exports for approved municipal systems and open-data dashboards.
+- Ensure fairness: prioritize genuine risk and public impact, rather than only reports from highly connected or digitally active communities.
+
+
+EXPECTED OUTCOME->
+
+The platform should transform unstructured citizen complaints into verified, location-aware, prioritized, and assignable municipal tasks. It should shorten response times for critical infrastructure failures, make departmental responsibility visible, reduce complaint loss and duplication, and give citizens credible evidence that their reports lead to action.
