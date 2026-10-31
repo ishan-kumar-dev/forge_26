@@ -4,6 +4,8 @@ import fs from 'fs';
 const rules = {
  'Road damage': ['Roads & Public Works', 4], 'Water supply': ['Water Supply', 4], Drainage: ['Drainage', 4], Sanitation: ['Sanitation', 3], Streetlight: ['Electrical Maintenance', 3], 'Public safety': ['Emergency Response', 5], Parks: ['Parks & Urban Forestry', 3], Other: ['Municipal Operations', 2]
 };
+export const CATEGORIES = Object.keys(rules);
+export const DEPARTMENTS = [...new Set(Object.values(rules).map(x => x[0]))];
 const keywords = [['pothole','Road damage'],['road','Road damage'],['leak','Water supply'],['waterlogging','Drainage'],['sewage','Drainage'],['garbage','Sanitation'],['waste','Sanitation'],['streetlight','Streetlight'],['tree','Parks'],['fallen','Public safety'],['fire','Public safety'],['danger','Public safety']];
 function fallback(input) {
  const text = `${input.title || ''} ${input.description || ''}`.toLowerCase(); let category = input.category || 'Other';
@@ -19,9 +21,9 @@ export async function analyzeReport(input) {
  try {
   const model = new GoogleGenerativeAI(key).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash', generationConfig: { responseMimeType: 'application/json', temperature: .1 } });
   const images = (input.media || []).filter(m => m.mime?.startsWith('image/') && m.filePath && m.size <= 4 * 1024 * 1024 && fs.existsSync(m.filePath)).slice(0, 2).map(m => ({ inlineData: { data: fs.readFileSync(m.filePath).toString('base64'), mimeType: m.mime } }));
-  const prompt = `You are an assistive municipal complaint triage system. Analyze this report${images.length ? ' and the attached photos' : ''}; never make a final authority decision. Return JSON only with category (one of ${Object.keys(rules).join(', ')}), department (one of ${[...new Set(Object.values(rules).map(x=>x[0]))].join(', ')}), severity integer 1-5, confidence number 0-1, reasoning max 250 chars, slaHours (4,24,72). Report: ${JSON.stringify({ title: input.title, description: input.description, category: input.category, address: input.address, ward: input.ward, hasMedia: input.media?.length > 0, potentialDuplicate: !!input.potentialDuplicate })}`;
+  const prompt = `You are an assistive municipal complaint triage system. Analyze this report${images.length ? ' and the attached photos' : ''}; never make a final authority decision. Return JSON only with category (one of ${CATEGORIES.join(', ')}), department (one of ${DEPARTMENTS.join(', ')}), severity integer 1-5, confidence number 0-1, reasoning max 250 chars, slaHours (4,24,72). Report: ${JSON.stringify({ title: input.title, description: input.description, category: input.category, address: input.address, ward: input.ward, hasMedia: input.media?.length > 0, potentialDuplicate: !!input.potentialDuplicate })}`;
   const parsed = JSON.parse((await model.generateContent([prompt, ...images])).response.text());
-  if (!rules[parsed.category] || !Number.isInteger(parsed.severity) || parsed.severity < 1 || parsed.severity > 5) throw new Error('Malformed AI response');
+  if (!rules[parsed.category] || !DEPARTMENTS.includes(parsed.department) || !Number.isInteger(parsed.severity) || parsed.severity < 1 || parsed.severity > 5) throw new Error('Malformed AI response');
   return { ...base, ...parsed, confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || base.confidence)), reasoning: `${String(parsed.reasoning || '').slice(0,250)} Municipal staff must review before action.`, source: images.length ? 'Gemini assistive vision and text analysis' : 'Gemini assistive text analysis' };
  } catch (error) { console.warn('AI analysis unavailable:', error.message); return { ...base, reasoning: `${base.reasoning} AI service was unavailable for this submission.` }; }
 }

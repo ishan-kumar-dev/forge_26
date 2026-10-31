@@ -10,6 +10,8 @@ A privacy-conscious municipal issue-reporting platform. It lets citizens file an
 
 ## Run locally
 
+Needs Node 22.13 or newer (the API uses the built-in `node:sqlite`, so there is nothing native to compile).
+
 1. Copy `server/.env.example` to `server/.env` and set a long `JWT_SECRET`. Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` to enable the initial staff account. Add `GEMINI_API_KEY` only if Gemini triage is wanted. Add the `SMTP_*` values plus `SMTP_FROM` to send status emails to citizen contacts that are valid email addresses.
 2. In one terminal run `cd server; npm install; npm run dev`.
 3. In another terminal run `cd client; npm install; npm run dev`.
