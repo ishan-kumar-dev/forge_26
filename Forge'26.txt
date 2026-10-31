@@ -86,3 +86,10 @@ IMPORTANT NON-FUNCTIONAL REQ->
 EXPECTED OUTCOME->
 
 The platform should transform unstructured citizen complaints into verified, location-aware, prioritized, and assignable municipal tasks. It should shorten response times for critical infrastructure failures, make departmental responsibility visible, reduce complaint loss and duplication, and give citizens credible evidence that their reports lead to action.
+
+RULES TO BE FOLLOWED->
+
+No Dummy Data: Hardcoded JSON files, static mock datasets, or fake placeholder numbers are strictly prohibited. Applications must connect to active backends and consume real-time APIs, live databases, or official open datasets (e.g., IMD, ISRO Bhuvan, Data.gov.in, etc.).
+
+No using fake, static, or hardcoded mock data instead of a live backend/real-time API.
+
