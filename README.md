@@ -28,5 +28,5 @@ Set `NODE_ENV=production`, a unique high-entropy `JWT_SECRET`, `CLIENT_ORIGIN` t
 - A citizen can submit without an account and uses the report reference to track progress.
 - GPS collection requires the browser’s explicit permission; an address is accepted when GPS is unavailable.
 - Status notifications are sent by email when SMTP is configured. SMS/WhatsApp delivery needs an approved municipal messaging provider.
-- Audio upload is stored securely but transcription is not available without a configured speech-to-text provider; text remains optional.
-- When configured, Gemini reviews up to two uploaded image files below 4 MB alongside the report text. Video/audio analysis requires a separate approved media-processing pipeline.
+- Audio and video are transcribed and analysed by Gemini in the background after the report is saved (speech-to-text in the original language with an English translation, plus a description of visible defects). Transcripts are shown to staff only. Without `GEMINI_API_KEY` the files are stored and marked "not analysed", and staff can run the analysis later from the queue. Note that on Google's free tier, submitted media may be used by Google to improve its products.
+- When configured, Gemini also reviews up to two uploaded image files below 4 MB alongside the report text. Audio/video results only change routing while no staff member has acted on the report, and they can only raise priority, never lower it.

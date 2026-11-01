@@ -11,7 +11,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { analyzeReport, CATEGORIES, DEPARTMENTS } from './services/triage.js';
+import { analyzeMedia, analyzeReport, CATEGORIES, DEPARTMENTS, geminiKey, isTimeMedia, slaFor } from './services/triage.js';
 import { notifyCitizen, notifyStatusChange } from './services/notifications.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -29,10 +29,15 @@ db.exec(`
  CREATE INDEX IF NOT EXISTS activities_report_idx ON activities(report_id);
 `);
 // No migration tool, so add columns that older local databases are missing.
-if (!db.prepare('PRAGMA table_info(reports)').all().some(c => c.name === 'evidence_json')) db.exec(`ALTER TABLE reports ADD COLUMN evidence_json TEXT NOT NULL DEFAULT '[]'`);
+const cols = db.prepare('PRAGMA table_info(reports)').all().map(c => c.name);
+for (const [name, type] of [['evidence_json', `TEXT NOT NULL DEFAULT '[]'`], ['media_status', `TEXT NOT NULL DEFAULT 'none'`], ['transcript', 'TEXT'], ['media_analysis', 'TEXT']]) if (!cols.includes(name)) db.exec(`ALTER TABLE reports ADD COLUMN ${name} ${type}`);
+// Actors that are machines, not staff. They must not count as a municipal response.
+const AI_ACTOR = 'Assistive AI';
+const SYSTEM_ACTORS = `('Citizen','Notification service','${AI_ACTOR}')`;
 // First staff touch and first resolution per report. Used by the dashboard, exports and performance report.
-db.exec(`CREATE VIEW IF NOT EXISTS report_timing AS SELECT r.id, r.department, r.ward, r.status, r.created_at, r.sla_due_at,
- (SELECT MIN(a.created_at) FROM activities a WHERE a.report_id=r.id AND a.actor NOT IN ('Citizen','Notification service')) responded_at,
+// Dropped and recreated so older databases pick up changes to the definition.
+db.exec(`DROP VIEW IF EXISTS report_timing; CREATE VIEW report_timing AS SELECT r.id, r.department, r.ward, r.status, r.created_at, r.sla_due_at,
+ (SELECT MIN(a.created_at) FROM activities a WHERE a.report_id=r.id AND a.actor NOT IN ${SYSTEM_ACTORS}) responded_at,
  (SELECT MIN(a.created_at) FROM activities a WHERE a.report_id=r.id AND a.action='Changed status to Resolved') resolved_at FROM reports r`);
 const STATUSES = ['Submitted','Under Review','Verified','Assigned','In Progress','Resolved','Closed'];
 const ROLES = ['admin','supervisor','worker'];
@@ -53,7 +58,8 @@ const citizenLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, standardHead
 const now = () => new Date().toISOString();
 const reportRef = () => `CR-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 const safeJson = (value, fallback = []) => { try { return JSON.parse(value); } catch { return fallback; } };
-const publicReport = (r) => ({ ...r, reporter_name: undefined, reporter_contact: undefined, media_json: undefined, evidence_json: undefined });
+// Transcripts are the citizen's own voice and can contain names or phone numbers, so they stay staff-only too.
+const publicReport = (r) => ({ ...r, reporter_name: undefined, reporter_contact: undefined, media_json: undefined, evidence_json: undefined, transcript: undefined, media_analysis: undefined });
 // Quote cells and defuse spreadsheet formulas, since titles are citizen input.
 const csvCell = v => { if (v == null) return ''; let s = String(v); if (/^[=+\-@]/.test(s)) s = `'${s}`; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 const toCsv = (cols, rows) => [cols.join(','), ...rows.map(r => cols.map(c => csvCell(r[c])).join(','))].join('\n');
@@ -90,6 +96,31 @@ app.post('/api/auth/login', (req, res) => {
  res.json({ token: sign(user), user: { name: user.name, role: user.role, department: user.department } });
 });
 
+// Background speech-to-text and video analysis. Results are suggestions: routing only moves if no staff member
+// has touched the report yet, priority only goes up, and everything is logged for review.
+const mediaJobs = new Set();
+const setMediaStatus = (id, status, analysis = null) => db.prepare('UPDATE reports SET media_status=?, media_analysis=COALESCE(?, media_analysis), updated_at=? WHERE id=?').run(status, analysis, now(), id);
+async function processMedia(id) {
+ if (mediaJobs.has(id)) return; const report = db.prepare('SELECT * FROM reports WHERE id=?').get(id); if (!report) return;
+ const media = safeJson(report.media_json).filter(isTimeMedia).map(m => ({ ...m, filePath: path.join(UPLOAD_DIR, path.basename(m.id)) }));
+ if (!media.length) return setMediaStatus(id, 'none');
+ if (!geminiKey()) return setMediaStatus(id, 'unavailable');
+ mediaJobs.add(id); setMediaStatus(id, 'pending');
+ try {
+  const a = await analyzeMedia({ ...report, media });
+  if (!a) throw new Error('The audio/video files are missing from the server.');
+  const fresh = db.prepare('SELECT * FROM reports WHERE id=?').get(id);
+  const untouched = fresh.status === 'Submitted' && !db.prepare(`SELECT 1 FROM activities WHERE report_id=? AND actor NOT IN ${SYSTEM_ACTORS}`).get(id);
+  const severity = untouched ? Math.max(fresh.severity, a.severity) : fresh.severity, department = untouched ? a.department : fresh.department;
+  const sla = untouched ? new Date(Date.parse(fresh.created_at) + slaFor(severity) * 3600000).toISOString() : fresh.sla_due_at;
+  db.prepare('UPDATE reports SET transcript=?, media_analysis=?, media_status=?, suggested_category=?, ai_confidence=?, ai_reasoning=?, analysis_source=?, severity=?, department=?, sla_due_at=?, updated_at=? WHERE id=?').run(a.transcript || null, a.observations || null, 'done', a.category, a.confidence, a.reasoning, a.source, severity, department, sla, now(), id);
+  const moved = [department !== fresh.department && `routed to ${department}`, severity !== fresh.severity && `priority raised to ${severity}`].filter(Boolean).join(', ');
+  audit(id, AI_ACTOR, 'Media analysed', `${a.transcript ? 'Speech transcribed' : 'No speech detected'}${a.language ? ` (${a.language})` : ''}. ${moved ? `Suggestion applied: ${moved}. Staff can override.` : 'Suggestion recorded for staff review.'}`);
+ } catch (e) {
+  console.warn('Media analysis failed:', e.message); setMediaStatus(id, 'failed', `Analysis failed: ${String(e.message).slice(0, 200)}`);
+  audit(id, AI_ACTOR, 'Media analysis failed', 'Staff can retry from the operations queue.');
+ } finally { mediaJobs.delete(id); }
+}
 // Same category, still open, and either within ~300 m or at the same typed address.
 function findDuplicate(f) {
  if (f.latitude && f.longitude) return db.prepare(`SELECT id, reference, title FROM reports WHERE status != 'Closed' AND category=? AND latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ? ORDER BY created_at DESC LIMIT 1`).get(f.category, +f.latitude - .003, +f.latitude + .003, +f.longitude - .003, +f.longitude + .003);
@@ -107,7 +138,10 @@ app.post('/api/reports', citizenLimit, upload.array('media', 3), async (req, res
    id, reference, fields.title.trim(), fields.description?.trim() || '', fields.category, triage.category, triage.confidence, triage.reasoning, triage.source, triage.severity, 'Submitted', triage.department, fields.address?.trim() || null, fields.ward || null, fields.latitude ? +fields.latitude : null, fields.longitude ? +fields.longitude : null, fields.observed_at || timestamp, fields.is_anonymous === 'true' ? null : fields.reporter_name?.trim() || null, fields.is_anonymous === 'true' ? null : fields.reporter_contact?.trim() || null, fields.is_anonymous === 'true' ? 1 : 0, JSON.stringify(media.map(({ filePath, ...stored }) => stored)), potentialDuplicate?.reference || null, 0, new Date(Date.now() + triage.slaHours * 3600000).toISOString(), timestamp, timestamp);
   if (potentialDuplicate) db.prepare('UPDATE reports SET duplicate_count=duplicate_count+1 WHERE id=?').run(potentialDuplicate.id);
   audit(id, 'Citizen', 'Submitted', potentialDuplicate ? `Potential duplicate of ${potentialDuplicate.reference}; staff review required.` : 'Submitted via citizen portal.');
-  res.status(201).json({ reference, severity: triage.severity, department: triage.department, duplicateHint: potentialDuplicate ? potentialDuplicate.reference : null, message: 'Your report was received and is awaiting municipal review.' });
+  // Not awaited: video analysis can take half a minute and the citizen shouldn't wait for it.
+  if (media.some(isTimeMedia)) processMedia(id);
+  const { media_status } = db.prepare('SELECT media_status FROM reports WHERE id=?').get(id);
+  res.status(201).json({ reference, severity: triage.severity, department: triage.department, duplicateHint: potentialDuplicate ? potentialDuplicate.reference : null, mediaStatus: media_status, message: 'Your report was received and is awaiting municipal review.' });
  } catch (e) { next(e); }
 });
 
@@ -255,5 +289,15 @@ app.post('/api/admin/users', auth, staff, adminOnly, (req, res) => {
 app.get('/api/admin/reports/:id/activities', auth, staff, (req,res) => res.json(db.prepare('SELECT * FROM activities WHERE report_id=? ORDER BY created_at DESC').all(req.params.id)));
 app.get('/api/media/:id', auth, staff, (req, res) => { const f = path.join(UPLOAD_DIR, path.basename(req.params.id)); if (!fs.existsSync(f)) return res.sendStatus(404); res.sendFile(f); });
 app.use((err, _req, res, _next) => { console.error(err); if (err instanceof multer.MulterError) return res.status(422).json({ error: err.message }); res.status(500).json({ error: 'An unexpected error occurred. Please try again.' }); });
-export { app };
+app.post('/api/admin/reports/:id/analyze-media', auth, staff, (req, res) => {
+ const report = db.prepare('SELECT * FROM reports WHERE id=?').get(req.params.id); if (!report) return res.status(404).json({ error: 'Report not found.' });
+ if (req.user.role !== 'admin' && report.department !== req.user.department) return res.status(403).json({ error: 'You may only manage reports assigned to your department.' });
+ if (!safeJson(report.media_json).some(isTimeMedia)) return res.status(422).json({ error: 'This report has no audio or video.' });
+ if (!geminiKey()) return res.status(503).json({ error: 'Speech and video analysis needs GEMINI_API_KEY on the server.' });
+ if (mediaJobs.has(report.id)) return res.status(409).json({ error: 'Analysis is already running.' });
+ processMedia(report.id); res.status(202).json({ ok: true });
+});
+export { app, processMedia };
+// Jobs cut off by a restart would otherwise stay "pending" forever.
+if (process.env.NODE_ENV !== 'test') for (const { id } of db.prepare(`SELECT id FROM reports WHERE media_status='pending'`).all()) processMedia(id);
 if (process.env.NODE_ENV !== 'test') app.listen(process.env.PORT || 5000, () => console.log(`Civic Resolve API listening on ${process.env.PORT || 5000}`));

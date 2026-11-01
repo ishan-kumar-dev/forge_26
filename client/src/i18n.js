@@ -18,6 +18,7 @@ const strings = {
   trAi: 'AI recommendation', trAiTail: 'This is assistive information, reviewed by municipal staff.',
   trClarify: 'The municipal team asked a question about this report', trReply: 'Your reply', trSend: 'Send reply', trSent: 'Reply sent. Thank you.',
   trEvidence: 'Photos from the municipal team', trBefore: 'Before', trAfter: 'After', trMerged: 'This report was merged into',
+  media_pending: 'Your audio/video is being transcribed and reviewed. This can take a minute.', media_done: 'Your audio/video has been transcribed for the municipal team.', media_unavailable: 'Your audio/video was saved. Staff will listen to it directly.', media_failed: 'Your audio/video was saved. Staff will listen to it directly.',
   ok: 'Report submitted.', geoNone: 'Geolocation is unavailable in this browser.', geoOk: 'Current location added.', geoDenied: 'Location permission was not granted.', failed: 'Submission failed.'
  },
  hi: {
@@ -37,6 +38,7 @@ const strings = {
   trAi: 'AI सुझाव', trAiTail: 'यह केवल सहायक जानकारी है, जिसकी जाँच नगर कर्मचारी करते हैं।',
   trClarify: 'नगर टीम ने इस शिकायत के बारे में एक सवाल पूछा है', trReply: 'आपका जवाब', trSend: 'जवाब भेजें', trSent: 'जवाब भेज दिया गया। धन्यवाद।',
   trEvidence: 'नगर टीम की फ़ोटो', trBefore: 'पहले', trAfter: 'बाद में', trMerged: 'यह शिकायत इसमें जोड़ दी गई है:',
+  media_pending: 'आपके ऑडियो/वीडियो को लिखित रूप में बदला और जाँचा जा रहा है। इसमें एक मिनट लग सकता है।', media_done: 'आपके ऑडियो/वीडियो को नगर टीम के लिए लिखित रूप में बदल दिया गया है।', media_unavailable: 'आपका ऑडियो/वीडियो सहेज लिया गया है। कर्मचारी इसे सीधे सुनेंगे।', media_failed: 'आपका ऑडियो/वीडियो सहेज लिया गया है। कर्मचारी इसे सीधे सुनेंगे।',
   ok: 'शिकायत जमा हो गई।', geoNone: 'इस ब्राउज़र में लोकेशन उपलब्ध नहीं है।', geoOk: 'मौजूदा लोकेशन जोड़ दी गई।', geoDenied: 'लोकेशन की अनुमति नहीं मिली।', failed: 'जमा नहीं हो सका।'
  }
 };

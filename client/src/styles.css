@@ -34,3 +34,7 @@
 .dashboardGrid .mapCard{margin:18px 0 0}.dashboardGrid+.dashboardGrid{padding-bottom:60px}
 .mapCard small,.performance small{display:block;color:var(--muted);font-size:11px;margin-top:8px}
 @media(max-width:720px){.adminQueue article{grid-template-columns:1fr}.dataTable{display:block;overflow-x:auto}.toolbar input,.toolbar select{min-width:0;width:100%}}
+.mediaAi{background:#f1f6f4;border:1px solid var(--mint);padding:12px;display:grid;gap:4px}
+.mediaAi small{font:11px 'DM Mono';text-transform:uppercase;color:var(--muted);margin-top:6px}
+.mediaAi p{margin:0;color:var(--ink);font-size:13px;white-space:pre-wrap}.mediaAi button{justify-self:start;margin-top:8px}
+.badge.media-pending{background:#e8f0fb;color:#24508f}.badge.media-failed{background:#fbe1dc;color:#8e1b12}

@@ -12,7 +12,7 @@ process.env.JWT_SECRET = 'test-only-secret';
 process.env.ADMIN_EMAIL = 'admin@city.test';
 process.env.ADMIN_PASSWORD = 'Temporary-Test-Only-Password-42';
 process.env.GEMINI_API_KEY = '';
-const { app, db } = await import('../index.js');
+const { app, db, processMedia } = await import('../index.js');
 
 // 1x1 PNG, enough for multer's mimetype check.
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
@@ -103,7 +103,35 @@ test('exports are anonymized CSV', async () => {
  await request(app).get('/api/admin/performance').expect(401);
 });
 
+test('voice notes without a Gemini key are kept and marked unavailable, transcripts never go public', async () => {
+ const res = await request(app).post('/api/reports').field('title', 'Leak by the temple').field('category', 'Water supply').field('address', 'Temple Street').attach('media', Buffer.from('fake audio'), { filename: 'note.webm', contentType: 'audio/webm' }).expect(201);
+ assert.equal(res.body.mediaStatus, 'unavailable');
+ const id = db.prepare('SELECT id FROM reports WHERE reference=?').get(res.body.reference).id;
+ await request(app).post(`/api/admin/reports/${id}/analyze-media`).set(as(admin)).expect(503);
+ db.prepare('UPDATE reports SET transcript=? WHERE id=?').run('My number is 98xxxxxx', id);
+ const tracked = (await request(app).get(`/api/reports/${res.body.reference}`)).body.report;
+ assert.equal(tracked.transcript, undefined);
+ assert.equal(tracked.media_status, 'unavailable');
+ const queued = (await request(app).get('/api/admin/reports').set(as(admin))).body.find(r => r.id === id);
+ assert.equal(queued.transcript, 'My number is 98xxxxxx');
+ // Photo-only reports never enter the media pipeline.
+ await request(app).post(`/api/admin/reports/${db.prepare('SELECT id FROM reports WHERE reference=?').get(first).id}/analyze-media`).set(as(admin)).expect(422);
+});
+
+test('a media job with missing files fails cleanly and is logged, not counted as a staff response', async () => {
+ const res = await request(app).post('/api/reports').field('title', 'Drain video').field('category', 'Drainage').field('address', 'Canal Road').attach('media', Buffer.from('fake video'), { filename: 'clip.mp4', contentType: 'video/mp4' }).expect(201);
+ const row = db.prepare('SELECT id, media_json FROM reports WHERE reference=?').get(res.body.reference);
+ for (const m of JSON.parse(row.media_json)) fs.rmSync(path.join(process.cwd(), 'uploads', m.id), { force: true });
+ process.env.GEMINI_API_KEY = 'test-key-not-real';
+ try { await processMedia(row.id); } finally { process.env.GEMINI_API_KEY = ''; }
+ const after = db.prepare('SELECT media_status, media_analysis FROM reports WHERE id=?').get(row.id);
+ assert.equal(after.media_status, 'failed');
+ assert.match(after.media_analysis, /missing/);
+ assert.ok(db.prepare(`SELECT 1 FROM activities WHERE report_id=? AND actor='Assistive AI' AND action='Media analysis failed'`).get(row.id));
+ assert.equal(db.prepare('SELECT responded_at FROM report_timing WHERE id=?').get(row.id).responded_at, null);
+});
+
 test.after(() => {
- for (const r of db.prepare('SELECT evidence_json FROM reports').all()) for (const e of JSON.parse(r.evidence_json)) fs.rmSync(path.join(process.cwd(), 'uploads', e.id), { force: true });
+ for (const r of db.prepare('SELECT evidence_json, media_json FROM reports').all()) for (const e of [...JSON.parse(r.evidence_json), ...JSON.parse(r.media_json)]) fs.rmSync(path.join(process.cwd(), 'uploads', e.id), { force: true });
  db.close(); for (const f of [testDb, `${testDb}-wal`, `${testDb}-shm`]) fs.rmSync(f, { force: true });
 });
